@@ -1,5 +1,16 @@
 # Adversarial Attack Generation Empowered by Min-Max Optimization
 
+This is the tensorflow implementation of min-max adversarial attacks as described in the following NeurIPS 2021 paper:
+
+```bibtex
+@inproceedings{wang2021adversarial,
+    title={Adversarial Attack Generation Empowered by Min-Max Optimization},
+    author={Wang, Jingkang and Zhang, Tianyun and Liu, Sijia  and Chen, Pin-Yu and Xu, Jiacen and Fardad, Makan and Li, Bo},
+    booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+    year={2021}
+}
+```
+
 ## Requirements
 - python 3.5
 - tensorflow 1.15.0
