@@ -11,10 +11,22 @@ This is the tensorflow implementation of min-max adversarial attacks as describe
 }
 ```
 
-## Requirements
-- python 3.5
+## Installation
+### Conda (Recommended)
+If you are using conda, you can create a `minmax-adv` environment with all the dependencies by running:
+
+```
+git clone https://github.com/wangjksjtu/minmax-adv.git
+cd minmax-adv
+conda env create -f environment.yaml
+source activate minmax-adv
+```
+
+### Manual Installation
+#### Requirements:
+- python 3.5+
 - tensorflow 1.15.0
-- cleverhans, keras, scipy, pandas, tabulate
+- keras, scipy, pandas, tabulate
 
 ```
 mkvirtualenv minmax-adv --python=/usr/bin/python3
