@@ -13,7 +13,7 @@
     Revisit the strength of min-max optimization in the context of  adversarial attack generation
 </div>
 
-## Reproduce the Results 
+## Reproduce Main Results
 Please check `neurips21` folder for reproducing the robust adversarial attack results presented in the paper. We provide detailed instructions in `neurips21/README.md` and bash scripts `neurips21/scripts`.  The code is based on tensorflow 1.x (tested from `1.10.0` - `1.15.0`), which is a bit outdated. Currently, we do not have plans to upgrade it to tensorflow 2.x. If you do not aim to reproduce the exact numbers but use min-max attacks in your projects, we provide a pytorch implementation with latest pre-trained models (e.g., EfficientNet, ViT, etc) and ImageNet-1k supports. Please see the following section for more details.
 
 ## Pytorch Implementation
