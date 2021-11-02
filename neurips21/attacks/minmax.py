@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from utils import proj_box, proj_box_appro, proj_prob_simplex
+from .utils import proj_box, proj_box_appro, proj_prob_simplex
 
 __all__ = [
     "minmax_ens",  # ensemble attack over multiple models: grad_delta
@@ -89,6 +89,7 @@ def minmax_ens(
                 ybar, logits = model(x + delta, logits=True)
             # print("clipping loss")
             # f.append(tf.maximum(loss_fn(labels=targets[i], logits=logits), tf.constant(50.0)))
+            f.append(loss_fn(labels=targets[i], logits=logits))
             # print(f)
 
         return tf.stack(f, axis=1)

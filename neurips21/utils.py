@@ -1,327 +1,386 @@
-import glob
+import argparse
 import os
-import re
+import random
+import sys
+import time
+from collections import OrderedDict
 
-import matplotlib
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-import seaborn as sns
-from matplotlib.lines import Line2D
+import scipy.misc
+import tensorflow as tf
+from keras.preprocessing.image import ImageDataGenerator
+from pandas import DataFrame
+from tabulate import tabulate
 
 
-def atoi(text):
-    return int(text) if text.isdigit() else text
+def str2bool(v):
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
-def natural_keys(text):
-    """
-    alist.sort(key=natural_keys) sorts in human order
-    http://nedbatchelder.com/blog/200712/human_sorting.html
-    (See Toothy's implementation in the comments)
-    """
-    return [atoi(c) for c in re.split(r"(\d+)", text)]
+def get_interval(eps_l=0.1, eps_r=1.0, num=10):
+    num = int(num)
+    assert num > 0 and (eps_l < eps_r)
+    if num == 1:
+        return [(eps_l + eps_r) / 2.0]
+    elif num == 2:
+        return [eps_l, eps_r]
+    else:
+        step = (eps_r - eps_l) / (num - 1)
+        return [eps_l + step * i for i in range(num)]
 
 
-def plot_w(indir="w_save/mnist"):
-    font = {"size": 22}
-    matplotlib.rc("font", **font)
+class MNIST:
+    def __init__(self, one_hot=True, shuffle=False, group_by_label=False):
+        self.x_train, self.y_train, self.x_test, self.y_test = self.load_data(one_hot, group_by_label)
+        self.num_train = self.x_train.shape[0]
+        self.num_test = self.x_test.shape[0]
+        if shuffle:
+            self.shuffle_data()
 
-    files = glob.glob(os.path.join(indir, "w_*.npy"))
-    files = sorted(files, key=natural_keys)
+    def load_data(self, one_hot, group_by_label):
+        mnist = tf.keras.datasets.mnist
+        (x_train, y_train), (
+            x_test,
+            y_test,
+        ) = mnist.load_data()
+        ## x_train.shape = (60000, 28, 28), range = [0, 255]
+        ## y_train.shape = (60000)
 
-    ws = []
-    for filename in files:
-        w = np.load(filename)
-        ws.append(w)
-        # print (w)
-        print(np.mean(w, axis=0))
+        x_train = np.reshape(x_train, [-1, 28, 28, 1])
+        x_train = x_train.astype(np.float32) / 255
+        x_test = np.reshape(x_test, [-1, 28, 28, 1])
+        x_test = x_test.astype(np.float32) / 255
 
-    ws = np.stack(ws, axis=0)
-    ticks = [str(i) for i in range(0, ws.shape[0], 5)]
+        if group_by_label:
+            ind_train = np.argsort(y_train)
+            ind_test = np.argsort(y_test)
+            x_train, y_train = x_train[ind_train], y_train[ind_train]
+            x_test, y_test = x_test[ind_test], y_test[ind_test]
 
-    def set_box_color(bp, color):
-        plt.setp(bp["boxes"], color=color)
-        plt.setp(bp["whiskers"], color=color)
-        plt.setp(bp["caps"], color=color)
-        plt.setp(bp["medians"], color=color)
+        if one_hot:
+            # convert to one-hot labels
+            y_train = tf.keras.utils.to_categorical(y_train)
+            y_test = tf.keras.utils.to_categorical(y_test)
 
-    plt.figure(figsize=(16, 8))
+        return x_train, y_train, x_test, y_test
 
-    medianprops = dict(linestyle="-", linewidth=2.5, color="red")
-
-    colors = ["r", "g", "b"]
-    arch = list("ABC")
-
-    for i in range(w.shape[-1]):
-        data = ws[:, :, i]
-        positions = np.array(range(len(data))) * 3.0 + 0.7 * (i - 1)
-        data = np.transpose(data)
-        # print (data)
-        # print (data.shape, len(data))
-        # print (positions, len(positions))
-        bp = plt.boxplot(data, positions=positions, sym="", patch_artist=True, medianprops=medianprops)
-        # set_box_color(bp, color[i]) # colors are from http://colorbrewer2.org/
-        plt.plot([], c=colors[i], label="Model " + arch[i])
-
-        for patch in bp["boxes"]:
-            patch.set_facecolor(colors[i])
-            r, g, b, a = patch.get_facecolor()
-            patch.set_facecolor((r, g, b, 0.3))
-
-    plt.legend(loc="upper left")
-    plt.xticks(range(0, len(ticks) * 3 * 5, 3 * 5), ticks)
-    plt.xlim(-3, len(ticks) * 3 * 5)
-    plt.ylim(0, 1)
-    plt.xlabel("Number of iterations")
-    plt.ylabel("$w_i$")
-    plt.tight_layout()
-    # plt.show()
-    plt.savefig("w_dist.pdf")
+    def shuffle_data(self):
+        ind = np.random.permutation(self.num_train)
+        self.x_train, self.y_train = self.x_train[ind], self.y_train[ind]
 
 
-def plot_loss(indir="logs_mnist_avg"):
-    sns.set(font_scale=1.4)
-    # sns.set_context("talk")
-    # sns.set_style("whitegrid")
+class CIFAR10:
+    def __init__(self, one_hot=True, shuffle=False, augument=False):
+        self.x_train, self.y_train, self.x_test, self.y_test = self.load_data(one_hot)
+        self.num_train = self.x_train.shape[0]
+        self.num_test = self.x_test.shape[0]
+        if augument:
+            self.x_train, self.y_train = self.augument_data()
+        if shuffle:
+            self.shuffle_data()
 
-    files = glob.glob(os.path.join(indir, "ens_model*.out"))
-    results = dict()
-    for filename in files:
-        log = open(filename, "r").readlines()
-        epochs = int(log[0].split(", ")[6].split("=")[-1])
-        result = []
-        for line in log[5:8]:
-            adv_loss, adv_acc = line.split("\t")
-            adv_loss = float(adv_loss.split(": ")[-1])
-            adv_acc = float(adv_acc.split(": ")[-1])
-            result += [adv_loss, adv_acc]
+    def load_data(self, one_hot):
+        cifar = tf.keras.datasets.cifar10
+        (x_train, y_train), (x_test, y_test) = cifar.load_data()
+        ##  x_train.shape = (50000, 32, 32, 3), range = [0, 255]
+        ##  y_train.shape = (50000, 1)
 
-        result += [float(log[-1].split(": ")[-1])]
-        results[epochs] = result
+        y_train = np.squeeze(y_train)
+        y_test = np.squeeze(y_test)
+        x_train = x_train.astype(np.float32) / 255
+        x_test = x_test.astype(np.float32) / 255
 
-    df = pd.DataFrame.from_dict(results, orient="index")
-    df.columns = ["loss1", "acc1", "loss2", "acc2", "loss3", "acc3", "foolrate"]
+        if one_hot:
+            # convert to one-hot labels
+            y_train = tf.keras.utils.to_categorical(y_train)
+            y_test = tf.keras.utils.to_categorical(y_test)
 
-    fig, ax1 = plt.subplots(figsize=(9, 6))
-    iters = np.arange(0, 40)
+        return x_train, y_train, x_test, y_test
 
-    ax1.plot(iters, df["loss1"], "b^-.", alpha=0.8)
-    ax1.plot(iters, df["loss2"], "bo:", alpha=0.8)
-    ax1.plot(iters, df["loss3"], "bs--", alpha=0.8)
+    def shuffle_data(self):
+        ind = np.random.permutation(self.num_train)
+        self.x_train, self.y_train = self.x_train[ind], self.y_train[ind]
 
-    ax1.set_xlabel("Number of iterations")
-    # Make the y-axis label, ticks and tick labels match the line color.
-    ax1.set_ylabel("loss", color="b")
-    ax1.tick_params("y", colors="b")
+    def augument_data(self):
+        image_generator = ImageDataGenerator(
+            rotation_range=90,
+            # zoom_range = 0.05,
+            width_shift_range=0.1,
+            height_shift_range=0.1,
+            horizontal_flip=True,
+            # vertical_flip=True,
+        )
 
-    ax2 = ax1.twinx()
+        image_generator.fit(self.x_train)
+        # get transformed images
+        x_train, y_train = image_generator.flow(
+            self.x_train, self.y_train, batch_size=self.num_train, shuffle=False
+        ).next()
 
-    ax2.plot(iters, df["acc1"], "m^-.", alpha=0.8)
-    ax2.plot(iters, df["acc2"], "mo:", alpha=0.8)
-    ax2.plot(iters, df["acc3"], "ms--", alpha=0.8)
-
-    legend_elements = [
-        Line2D([0], [0], marker="^", linestyle="-.", lw=2, c="r", label="Model A"),
-        Line2D([0], [0], marker="o", linestyle=":", lw=2, c="r", label="Model B"),
-        Line2D([0], [0], marker="s", linestyle="--", lw=2, c="r", label="Model C"),
-        Line2D([0], [0], marker="x", linestyle="-", lw=2, c="r", label="success rate"),
-    ]
-
-    ax2.plot(iters, df["foolrate"], "rx-", linewidth=2.0)
-
-    plt.legend(handles=legend_elements, loc="lower right")
-
-    ax2.set_ylabel("test accuracy", color="m")
-    ax2.tick_params("y", colors="m")
-    ax2.grid(False)
-    fig.tight_layout()
-    # plt.show()
-    plt.savefig("loss_acc_avg.pdf")
+        return x_train, y_train
 
 
-def plot_eps(indir="logs_mnist_eps"):
-    sns.set(font_scale=1.4)
-    files = glob.glob(os.path.join(indir, "ens_model*.out"))
+class Logger:
+    def __init__(self, name="model", fmt=None, base="./logs"):
+        self.handler = True
+        self.scalar_metrics = OrderedDict()
+        self.fmt = fmt if fmt else dict()
 
-    avg_asr = []
-    avg_eps = []
-    mm_asr = []
-    mm_eps = []
+        if not os.path.exists(base):
+            os.makedirs(base)
+        self.path = os.path.join(base, name + "_" + str(time.time()))
 
-    for filename in files:
-        log = open(filename, "r").readlines()
-        avg = log[0].split(", ")[2].split("=")[-1]
-        eps = log[0].split(", ")[7].split("=")[-1]
-        foolrate = float(log[-1].split(": ")[-1])
+        self.logs = self.path + ".csv"
+        self.output = self.path + ".out"
 
-        if avg == "True":
-            avg_asr.append(foolrate)
-            avg_eps.append(eps)
+        def prin(*args):
+            str_to_write = " ".join(map(str, args))
+            with open(self.output, "a") as f:
+                f.write(str_to_write + "\n")
+                f.flush()
+
+            print(str_to_write)
+            sys.stdout.flush()
+
+        self.print = prin
+
+    def add_scalar(self, t, key, value):
+        if key not in self.scalar_metrics:
+            self.scalar_metrics[key] = []
+        self.scalar_metrics[key] += [(t, value)]
+
+    def iter_info(self, order=None):
+        names = list(self.scalar_metrics.keys())
+        if order:
+            names = order
+        values = [self.scalar_metrics[name][-1][1] for name in names]
+        t = int(np.max([self.scalar_metrics[name][-1][0] for name in names]))
+        fmt = ["%s"] + [self.fmt[name] if name in self.fmt else ".1f" for name in names]
+
+        if self.handler:
+            self.handler = False
+            self.print(tabulate([[t] + values], ["epoch"] + names, floatfmt=fmt))
         else:
-            mm_asr.append(foolrate)
-            mm_eps.append(eps)
+            self.print(tabulate([[t] + values], ["epoch"] + names, tablefmt="plain", floatfmt=fmt).split("\n")[1])
 
-    mm_asr = [x for _, x in sorted(zip(mm_eps, mm_asr))]
-    avg_asr = [x for _, x in sorted(zip(avg_eps, avg_asr))]
+    def save(self):
+        result = None
+        for key in self.scalar_metrics.keys():
+            if result is None:
+                result = DataFrame(self.scalar_metrics[key], columns=["t", key]).set_index("t")
+            else:
+                df = DataFrame(self.scalar_metrics[key], columns=["t", key]).set_index("t")
+                result = result.join(df, how="outer")
+        result.to_csv(self.logs)
 
-    mm_eps = sorted(mm_eps)
-    avg_eps = sorted(avg_eps)
-
-    plt.plot(avg_eps, avg_asr, "o-", label="average case", linewidth=2.0)
-    plt.plot(mm_eps, mm_asr, "^-", label="minmax optimization", linewidth=2.0)
-    plt.legend()
-    plt.xlabel("$\\epsilon$")
-    plt.ylabel("Attack success rate")
-    plt.tight_layout()
-    # plt.show()
-    plt.savefig("compare_mnist.pdf")
+        self.print("The log/output have been saved to: " + self.path + " + .csv/.out")
 
 
-# draw box plot between weight and eps
-def plot_w_norm(indir="save_mnist_w"):
-    font = {"size": 22}
-    matplotlib.rc("font", **font)
-
-    files = glob.glob(os.path.join(indir, "w_*.npy"))
-    files = sorted(files, key=natural_keys)
-
-    ws = []
-    for filename in files:
-        w = np.load(filename)
-        ws.append(w)
-
-    ws = np.stack(ws, axis=0)
-    ticks = [str(i) for i in range(0, ws.shape[0], 50)]
-
-    def set_box_color(bp, color):
-        plt.setp(bp["boxes"], color=color)
-        plt.setp(bp["whiskers"], color=color)
-        plt.setp(bp["caps"], color=color)
-        plt.setp(bp["medians"], color=color)
-
-    plt.figure(figsize=(16, 8))
-    medianprops = dict(linestyle="-", linewidth=1.0, color="red")
-    colors = ["r", "g", "b"]
-    arch = ["$\\ell_\\infty$", "$\\ell_2$", "$\\ell_1$"]
-
-    for i in range(ws.shape[-1]):
-        data = ws[:, :, i]
-        positions = np.array(range(len(data))) * 3.0 + 0.7 * (i - 1)
-        data = np.transpose(data)
-        bp = plt.boxplot(data, positions=positions, widths=0.5, sym="", patch_artist=True, medianprops=medianprops)
-        plt.plot([], c=colors[i], label=arch[i])
-
-        for patch in bp["boxes"]:
-            patch.set_facecolor(colors[i])
-            r, g, b, a = patch.get_facecolor()
-            patch.set_facecolor((r, g, b, 0.3))
-
-    plt.legend(loc="upper left")
-    plt.xticks(range(0, len(ticks) * 3 * 5, 3 * 5), ticks)
-    plt.xlim(-3, len(ticks) * 3 * 5)
-    plt.ylim(-0.05, 1.05)
-    plt.xlabel("Number of iterations")
-    plt.ylabel("$w_i$")
-    plt.tight_layout()
-    # plt.show()
-    plt.savefig("w_dist.pdf")
+class Experiment:
+    pass
 
 
-# draw box plot between weights and eps
-def plot_w_eps(indir="save_mnist_w"):
-    font = {"size": 26}
-    matplotlib.rc("font", **font)
-
-    files = glob.glob(os.path.join(indir, "w_349.npy"))
-    files = sorted(files, key=natural_keys)[1:8]
-    ws = []
-    eps = []
-    for filename in files:
-        w = np.load(filename)
-        e = re.findall(r"\d+\.\d+", filename)[1]
-        ws.append(w)
-        eps.append(e)
-    ws = np.stack(ws, axis=0)
-
-    def set_box_color(bp, color):
-        plt.setp(bp["boxes"], color=color)
-        plt.setp(bp["whiskers"], color=color)
-        plt.setp(bp["caps"], color=color)
-        plt.setp(bp["medians"], color=color)
-
-    plt.figure(figsize=(8, 6))
-    medianprops = dict(linestyle="-", linewidth=0.5, color="red")
-    colors = ["blue", "orange", "b"]
-    arch = ["$\\ell_\\infty$", "$\\ell_2$"]
-
-    for i in range(ws.shape[-1]):
-        data = ws[:, :, i]
-        positions = np.array(range(len(data))) * 15.0
-        data = np.transpose(data)
-        bp = plt.violinplot(data, positions=positions, widths=3.5, showmeans=True)
-        plt.plot([], c=colors[i], label=arch[i])
-
-        for pc in bp["bodies"]:
-            pc.set_edgecolor("black")
-            pc.set_linewidth(1)
-            pc.set_alpha(0.5)
-
-    plt.legend(loc="upper right")
-    plt.xticks(range(0, len(eps) * 3 * 5, 3 * 5), eps)
-    plt.xlim(-15, len(eps) * 3 * 5)
-    plt.ylim(-0.05, 1.05)
-    plt.xlabel("$\epsilon (\ell_2)$")
-    plt.ylabel("$w_i$")
-    plt.tight_layout()
-    # plt.show()
-    plt.savefig("w_dist.pdf")
+def identity(images):
+    images = tf.convert_to_tensor(images)
+    return tf.identity(images)
 
 
-# draw box plots on data transformation between weight and epoch
-def plot_trans_w(indir="save_mnist_w"):
-    font = {"size": 22}
-    matplotlib.rc("font", **font)
-    ws = []
+def fliplr(images, prob=1.0):
+    images = tf.convert_to_tensor(images)
+    do_flip = tf.random_uniform([]) < prob
+    return tf.cond(do_flip, lambda: tf.image.flip_left_right(images), lambda: images)
 
-    files = glob.glob(os.path.join(indir, "w_*.npy"))
-    files = sorted(files, key=natural_keys)
-    arch = ["fliplr", "adjust_brightness", "rotate_random", "useless"]
-    for filename in files:
-        w = np.load(filename)
-        ws.append(w)
-    ws = np.stack(ws, axis=0)
-    ticks = [str(i) for i in range(0, ws.shape[0], 50)]
 
-    def set_box_color(bp, color):
-        plt.setp(bp["boxes"], color=color)
-        plt.setp(bp["whiskers"], color=color)
-        plt.setp(bp["caps"], color=color)
-        plt.setp(bp["medians"], color=color)
+def flipud(images):
+    images = tf.convert_to_tensor(images)
+    return tf.image.flip_up_down(images)
 
-    plt.figure(figsize=(16, 8))
-    # medianprops = dict(linestyle='-', linewidth=1, color='red')
-    colors = ["r", "g", "b", "y"]
-    for i in range(w.shape[-1]):
-        data = ws[:, :, i]
-        positions = np.array(range(len(data))) * 3.0 + 0.7 * (i - 1)
-        data = np.transpose(data)
-        bp = plt.boxplot(data, positions=positions, sym="", patch_artist=True)
-        plt.plot([], c=colors[i], label=arch[i])
 
-    plt.legend(loc="upper left")
-    plt.xticks(range(0, len(ticks) * 3 * 5, 3 * 5), ticks)
-    plt.xlim(-3, len(ticks) * 3 * 5)
-    plt.ylim(-0.1, 1.1)
-    plt.xlabel("epochs")
-    plt.ylabel("$w_i$")
-    plt.tight_layout()
-    # plt.show()
-    plt.savefig("w_dist.pdf")
+def adjust_brightness(images, delta=0.1, prob=1.0):
+    images = tf.convert_to_tensor(images)
+    do_adjust_brightness = tf.random_uniform([]) < prob
+    return tf.cond(do_adjust_brightness, lambda: tf.image.adjust_brightness(images, delta=delta), lambda: images)
+
+
+def adjust_gamma(images, gamma=1.3):
+    images = tf.convert_to_tensor(images)
+    return tf.image.adjust_gamma(images, gamma=gamma)
+
+
+def adjust_contrast(images, contrast_factor=0.7):
+    images = tf.convert_to_tensor(images)
+    return tf.image.adjust_contrast(images, contrast_factor)
+
+
+# support for tf 1.12.0 or higher (not support batch processing!!)
+def adjust_jpeg_quality(images, quality=50):
+    images = tf.convert_to_tensor(images)
+    batch = images.shape[0]
+    outputs = []
+    for i in range(batch):
+        outputs.append(tf.image.adjust_jpeg_quality(images[i], quality))
+    return tf.stack(outputs, axis=0)
+
+
+def crop_and_resize(images, boxes=[[0.1, 0.1, 0.9, 0.9]], box_ind=[0], crop_size=[32, 32]):
+    images = tf.convert_to_tensor(images)
+    batch = tf.shape(images)[0]
+    boxes = tf.tile(boxes, [batch, 1])
+    box_ind = tf.range(batch)
+
+    return tf.image.crop_and_resize(images, boxes=boxes, box_ind=box_ind, crop_size=crop_size)
+
+
+def rotate(images, angles):
+    images = tf.convert_to_tensor(images)
+
+    return tf.contrib.image.rotate(images, angles * np.pi / 180)
+
+
+# rotation series
+def rot30(images):
+    return rotate(images, 30)
+
+
+def rot60(images):
+    return rotate(images, 60)
+
+
+def rot90(images):
+    return rotate(images, 90)
+
+
+def rot120(images):
+    return rotate(images, 120)
+
+
+def rot150(images):
+    return rotate(images, 150)
+
+
+def rot180(images):
+    return rotate(images, 180)
+
+
+def rot30_(images):
+    return rotate(images, -30)
+
+
+def rot60_(images):
+    return rotate(images, -60)
+
+
+def rot90_(images):
+    return rotate(images, -90)
+
+
+def rot120_(images):
+    return rotate(images, -120)
+
+
+def rot150_(images):
+    return rotate(images, -150)
+
+
+def rotate_random(images, minval=-np.pi / 2, maxval=np.pi / 2):
+    images = tf.convert_to_tensor(images)
+
+    return tf.contrib.image.rotate(images, tf.random_uniform((), minval=minval, maxval=maxval))
+
+
+def test_mnist():
+    print("Testing MNIST dataloader...")
+    data = MNIST()
+    print(data.x_train.shape, data.y_train.shape, data.x_test.shape, data.y_test.shape)
+    data = MNIST(one_hot=False)
+    print(data.x_train.shape, data.y_train.shape, data.x_test.shape, data.y_test.shape)
+    print(data.y_train[0:10])
+    data = MNIST(shuffle=True, one_hot=False)
+    print(data.x_train.shape, data.y_train.shape, data.x_test.shape, data.y_test.shape)
+    print(data.y_train[0:10])
+
+
+def test_cifar10():
+    print("Testing CIFAR10 dataloader...")
+    data = CIFAR10()
+    print(data.x_train.shape, data.y_train.shape, data.x_test.shape, data.y_test.shape)
+    data = CIFAR10(one_hot=False)
+    print(data.x_train.shape, data.y_train.shape, data.x_test.shape, data.y_test.shape)
+    print(data.y_train[0:10])
+    data = CIFAR10(shuffle=True, one_hot=False)
+    print(data.x_train.shape, data.y_train.shape, data.x_test.shape, data.y_test.shape)
+    print(data.y_train[0:10])
+
+
+def test_augmentation():
+    print("Testing image augmentation ops...")
+    data = CIFAR10()
+    images = data.x_train[:5]
+    # images = (images * 255).astype(np.uint8)
+
+    # tensorflow image library
+    with tf.Session() as sess:
+        images_identity = identity(images)
+        images_fliplr = fliplr(images)
+        images_flipud = flipud(images)
+        images_crop_and_resize = crop_and_resize(images)
+        images_brightness = adjust_brightness(images)
+        images_contrast = adjust_contrast(images)
+        images_gamma = adjust_gamma(images)
+        images_jpeg = adjust_jpeg_quality(images)
+        images_rot1 = rotate(images, 30)
+        images_rot2 = rotate(images, -30)
+        images_rot3 = rotate(images, 60)
+        images_rot4 = rotate(images, -60)
+        images_rot5 = rotate(images, 120)
+        images_rot6 = rotate(images, -120)
+
+        ims = [
+            images_identity,
+            images_fliplr,
+            images_flipud,
+            images_crop_and_resize,
+            images_brightness,
+            images_contrast,
+            images_gamma,
+            images_jpeg,
+            images_rot1,
+            images_rot2,
+            images_rot3,
+            images_rot4,
+            images_rot5,
+            images_rot6,
+        ]
+        output = [
+            "",
+            "_fliplr",
+            "_flipud",
+            "_crop",
+            "_bright",
+            "_contrast",
+            "_gamma",
+            "_jpeg_compress",
+            "_rot1",
+            "_rot2",
+            "_rot3",
+            "_rot4",
+            "_rot5",
+            "_rot6",
+        ]
+
+        for i, im in enumerate(ims):
+            if not os.path.exists("test"):
+                os.makedirs("test")
+            images = (sess.run(im) * 255).astype(np.uint8)
+            print(images.shape, output[i])
+            for j in range(5):
+                scipy.misc.imsave("test/" + str(j) + output[i] + ".jpeg", images[j])
 
 
 if __name__ == "__main__":
-    plot_loss()
-    # plot_w_norm()
-    # plot_trans_w()
-    # plot_eps_new()
+    test_augmentation()
