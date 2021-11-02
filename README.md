@@ -1,8 +1,10 @@
 # Min-Max Adversarial Attacks
 
-[[`Paper`]()]
+[[`Paper`](https://arxiv.org/pdf/1906.03563.pdf)]
 [[`arXiv`](https://arxiv.org/abs/1906.03563)]
-[[`Project Page`](http://www.cs.toronto.edu/~wangjk/publications/minmax-adv.html)]
+[`Video`]
+[`Slide`]
+<!-- [[`Project Page`](http://www.cs.toronto.edu/~wangjk/publications/minmax-adv.html)] -->
 
 > [Adversarial Attack Generation Empowered by Min-Max Optimization]()  
 > Jingkang Wang, Tianyun Zhang, Sijia Liu,  Pin-Yu Chen, Jiacen Xu, Makan Fardad, Bo Li \
