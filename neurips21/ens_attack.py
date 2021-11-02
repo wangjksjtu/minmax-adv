@@ -19,7 +19,6 @@ parser.add_argument("--alpha", default=7, type=float, help="1/alpha is step size
 parser.add_argument("--beta", default=40, type=float, help="1/beta is step size for inner max")
 parser.add_argument("--gamma", default=3, type=float, help="regularization coefficient to balance avg/worst-case")
 parser.add_argument("--loss_func", default="cw", type=str, help="loss function: xent/cw")
-parser.add_argument("--weigh_logits", default=False, type=str2bool, help="weigh logits rather than loss")
 parser.add_argument("--batch_size", default=128, type=int, help="batch size for training & testing")
 parser.add_argument("--norm", default=np.inf, type=float, help="order of norm")
 parser.add_argument("--models", default="ABC", type=str, help="models to ensemble")
@@ -129,37 +128,21 @@ def run(args, env, data, modelzoo, logger, K):
     env.ens_mm_epochs = tf.placeholder(tf.int32, (), name="ens_mm_epochs")
 
     # Building min-max optimization graph
-    if not args.weigh_logits:
-        env.x_mm_ens, env.W = minmax_ens(
-            models,
-            env.x,
-            norm=args.norm,
-            epochs=env.ens_mm_epochs,
-            eps=env.ens_mm_eps,
-            fixed_W=args.avg_case,
-            alpha=args.alpha,
-            beta=args.beta,
-            gamma=args.gamma,
-            loss_func=args.loss_func,
-            models_suffix=args.models,
-            appro=args.appro,
-            normalize=args.normalize,
-        )
-    else:
-        env.x_mm_ens, env.W = minmax_ens_logits(
-            models,
-            env.x,
-            norm=args.norm,
-            epochs=env.ens_mm_epochs,
-            eps=env.ens_mm_eps,
-            fixed_W=args.avg_case,
-            alpha=args.alpha,
-            beta=args.beta,
-            gamma=args.gamma,
-            targeted=False,
-            loss_func=args.loss_func,
-            models_suffix=args.models,
-        )
+    env.x_mm_ens, env.W = minmax_ens(
+        models,
+        env.x,
+        norm=args.norm,
+        epochs=env.ens_mm_epochs,
+        eps=env.ens_mm_eps,
+        fixed_w=args.avg_case,
+        alpha=args.alpha,
+        beta=args.beta,
+        gamma=args.gamma,
+        loss_func=args.loss_func,
+        models_suffix=args.models,
+        appro_proj=args.appro,
+        normalize=args.normalize,
+    )
 
     # Initializing graph
     sess = tf.InteractiveSession()

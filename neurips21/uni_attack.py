@@ -200,7 +200,7 @@ def run(args, env, data, modelzoo, logger, K):
         norm=args.norm,
         epochs=env.uni_mm_epochs,
         eps=env.uni_mm_eps,
-        fixed_W=args.avg_case,
+        fixed_w=args.avg_case,
         alpha=args.alpha,
         beta=args.beta,
         gamma=args.gamma,

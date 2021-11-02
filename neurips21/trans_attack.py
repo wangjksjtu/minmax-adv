@@ -136,7 +136,7 @@ def run(args, env, data, modelzoo, G, logger, K):
         norm=np.inf,
         epochs=env.trans_mm_epochs,
         eps=env.trans_mm_eps,
-        fixed_W=args.avg_case,
+        fixed_w=args.avg_case,
         alpha=args.alpha,
         beta=args.beta,
         gamma=args.gamma,
