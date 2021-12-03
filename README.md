@@ -2,8 +2,8 @@
 
 [[`Paper`](https://arxiv.org/pdf/1906.03563.pdf)]
 [[`arXiv`](https://arxiv.org/abs/1906.03563)]
-[`Video`]
-[`Slide`]
+[[`Poster`](https://github.com/wangjksjtu/minmax-adv/blob/main/imgs/min-max-adv-poster.pdf)]
+[[`Slide`](https://neurips.cc/media/neurips-2021/Slides/27929.pdf)]
 <!-- [[`Project Page`](http://www.cs.toronto.edu/~wangjk/publications/minmax-adv.html)] -->
 
 > [Adversarial Attack Generation Empowered by Min-Max Optimization]()  
