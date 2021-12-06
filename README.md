@@ -4,7 +4,7 @@
 [[`arXiv`](https://arxiv.org/abs/1906.03563)]
 [[`Poster`](https://github.com/wangjksjtu/minmax-adv/blob/main/imgs/min-max-adv-poster.pdf)]
 [[`Slide`](https://neurips.cc/media/neurips-2021/Slides/27929.pdf)]
-<!-- [[`Project Page`](http://www.cs.toronto.edu/~wangjk/publications/minmax-adv.html)] -->
+[[`Project Page`](http://www.cs.toronto.edu/~wangjk/publications/minmax-adv.html)]
 
 > [Adversarial Attack Generation Empowered by Min-Max Optimization]()  
 > Jingkang Wang, Tianyun Zhang, Sijia Liu,  Pin-Yu Chen, Jiacen Xu, Makan Fardad, Bo Li \
